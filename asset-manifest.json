@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/UNIPEBits/static/css/main.34952df2.css",
+    "main.js": "/UNIPEBits/static/js/main.0b1b989e.js",
+    "index.html": "/UNIPEBits/index.html",
+    "main.34952df2.css.map": "/UNIPEBits/static/css/main.34952df2.css.map",
+    "main.0b1b989e.js.map": "/UNIPEBits/static/js/main.0b1b989e.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.34952df2.css",
+    "static/js/main.0b1b989e.js"
+  ]
+}
