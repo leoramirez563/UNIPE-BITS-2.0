@@ -175,12 +175,23 @@ function NivelMedio({ volverAOpciones }) {
             text-transform: uppercase;
           }
 
-          :root { --neon-green: #00ff41; --dark-bg: #0a0a0a; --card-bg-proto: rgba(20, 20, 20, 0.95); --text-gray: #b0b0b0; }
+          :root { --neon-green: #00ff41; --dark-bg: #0a0a0a; --text-gray: #b0b0b0; }
           .proto-body { background-color: #000; color: white; font-family: 'Courier New', Courier, monospace; line-height: 1.6; padding: 20px; }
           .canvas-matrix-proto { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
           .container-proto { max-width: 850px; margin: 0 auto; position: relative; }
           .header-proto { text-align: center; margin-bottom: 40px; border: 2px solid var(--neon-green); padding: 20px; background: rgba(0,0,0,0.8); box-shadow: 0 0 15px var(--neon-green); }
-          .lesson-card-proto { background: var(--card-bg-proto); border-left: 5px solid var(--neon-green); padding: 25px; margin-bottom: 25px; border-radius: 0 8px 8px 0; box-shadow: 5px 5px 15px rgba(0,0,0,0.5); }
+          
+          .lesson-card-proto { 
+            background: rgba(0, 255, 65, 0.15); 
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            border-left: 5px solid var(--neon-green); 
+            padding: 25px; 
+            margin-bottom: 25px; 
+            border-radius: 0 8px 8px 0; 
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); 
+            backdrop-filter: blur(2px); 
+          }
+
           .math-grid-proto { display: flex; justify-content: center; gap: 10px; margin: 25px 0; flex-wrap: wrap; }
           .math-box-proto { background: #000; border: 2px solid var(--neon-green); padding: 10px; text-align: center; min-width: 80px; flex: 1; }
           .pow-text-proto { font-size: 1.1em; color: #fff; display: block; margin-bottom: 5px; }
