@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/UNIPE-BITS-2.0/static/css/main.34952df2.css",
-    "main.js": "/UNIPE-BITS-2.0/static/js/main.f2ebdc8f.js",
+    "main.css": "/UNIPE-BITS-2.0/static/css/main.3a85a9be.css",
+    "main.js": "/UNIPE-BITS-2.0/static/js/main.ad52dccf.js",
     "index.html": "/UNIPE-BITS-2.0/index.html",
-    "main.34952df2.css.map": "/UNIPE-BITS-2.0/static/css/main.34952df2.css.map",
-    "main.f2ebdc8f.js.map": "/UNIPE-BITS-2.0/static/js/main.f2ebdc8f.js.map"
+    "main.3a85a9be.css.map": "/UNIPE-BITS-2.0/static/css/main.3a85a9be.css.map",
+    "main.ad52dccf.js.map": "/UNIPE-BITS-2.0/static/js/main.ad52dccf.js.map"
   },
   "entrypoints": [
-    "static/css/main.34952df2.css",
-    "static/js/main.f2ebdc8f.js"
+    "static/css/main.3a85a9be.css",
+    "static/js/main.ad52dccf.js"
   ]
 }
