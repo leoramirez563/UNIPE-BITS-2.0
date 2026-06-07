@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css'; // Esto es lo que conecta el diseño con el programa
-import App from './App';
+import App from './App.js'; // <-- AGREGADO EL .js AQUÍ
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

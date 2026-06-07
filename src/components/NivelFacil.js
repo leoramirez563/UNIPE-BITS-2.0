@@ -11,7 +11,7 @@ const generateShuffledTargets = (count) => {
     .slice(0, count);
 };
 
-function NivelFacil({ volverAOpciones }) {
+function NivelFacil({ volverAOpciones, name, onGuardarPartida }) {
   const [gameState, setGameState] = useState('instructions'); 
   const [showProtocol, setShowProtocol] = useState(false);
   const [bits, setBits] = useState(Array(3).fill(0));
@@ -19,6 +19,9 @@ function NivelFacil({ volverAOpciones }) {
   const [round, setRound] = useState(1);
   const [targetList, setTargetList] = useState([]);
   const [target, setTarget] = useState(0);
+
+  // Contador discreto para reportar a MariaDB
+  const [errorsCount, setErrorsCount] = useState(0);
 
   const currentSum = bits.reduce((acc, bit, index) => acc + (bit * POWERS[index]), 0);
   const binaryString = bits.join('');
@@ -33,13 +36,16 @@ function NivelFacil({ volverAOpciones }) {
   const audioPop = useRef(null);
   const canvasRef = useRef(null);
 
+  // CANDADO ANTI-DUPLICADOS (Evita el doble disparo en React)
+  const partidaGuardadaRef = useRef(false);
+
   useEffect(() => {
     const newList = generateShuffledTargets(TOTAL_ROUNDS);
     setTargetList(newList);
     setTarget(newList[0]);
   }, []);
 
-  // MATRIX SCRIPT (ORIGINAL)
+  // MATRIX SCRIPT
   useEffect(() => {
     if (showProtocol && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -107,6 +113,7 @@ function NivelFacil({ volverAOpciones }) {
     if (isTurningOn) {
       if (nextSum > target) {
         setScore(prev => Math.max(0, prev - 10));
+        setErrorsCount(prev => prev + 1); // Registramos el error de manera silenciosa
         playSound(audioMal); 
       } else {
         playSound(audioBien);
@@ -122,6 +129,20 @@ function NivelFacil({ volverAOpciones }) {
         setGameState('won');
         playSound(audioVictoria);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
+        // DISPARADOR DE GUARDADO CON CANDADO ACTIVADO
+        if (!partidaGuardadaRef.current && onGuardarPartida) {
+          partidaGuardadaRef.current = true; // Bloqueamos instantáneamente
+          onGuardarPartida({
+            nivel: 'Fácil',
+            errores: errorsCount,
+            completada: true,
+            objetivo_cumplido: true,
+            tiempo_tomado: 60,  // Tiempo de referencia fijo para el Modo Práctica sin reloj
+            tiempo_restante: 0
+          });
+        }
+
       } else {
         playSound(audioSiguiente);
         setRound(prev => prev + 1);
@@ -138,7 +159,9 @@ function NivelFacil({ volverAOpciones }) {
     setGameState('playing');
     setRound(1);
     setScore(0);
+    setErrorsCount(0);
     setBits(Array(3).fill(0));
+    partidaGuardadaRef.current = false; // Liberamos el candado para la nueva partida
   };
 
   return (
@@ -216,7 +239,7 @@ function NivelFacil({ volverAOpciones }) {
 
               <section className="lesson-card">
                 <h2 style={{color: 'var(--matrix-green)', fontSize: '1.4em'}}>2. Regla de Oro: Derecha a Izquierda</h2>
-                <p>Para construir cualquier número, siempre empezamos de derecha a izquierda. Ubicamos el 1 según el valor que necesitamos sumar y completamos el resto con cero.</p>
+                <p>Para construir cualquier número, siempre empezamos de derecha a izquierda. Ubicamos el 1 según el value que necesitamos sumar y completamos el resto con cero.</p>
                 <div className="direction-alert">IMPORTANTE: SE RELLENA DE DERECHA (1) → A IZQUIERDA (EXPANSIÓN)</div>
                 <div className="user-grid-container">
                   <div className="user-col"><span className="header-val">32</span><span className="bit-val">1</span></div>
@@ -278,7 +301,7 @@ function NivelFacil({ volverAOpciones }) {
               <button className="btn-protocolo" onClick={() => { playSound(audioPop); setShowProtocol(true); }}>Protocolo</button>
               <div className="converter-card instruction-card">
                 <h1 className="success-text">MODO APRENDIZ</h1>
-                <p>Bienvenido al simulador básico. Aquí aprenderás los fundamentos sin presión.</p>
+                <p>Bienvenido al simulador básico. Aquí aprenderás los fundamentos sin presión, operador <span className="highlight">{name}</span>.</p>
                 <ul className="instruction-list" style={{ listStyle: 'none', padding: 0 }}>
                   <p style={{ marginBottom: '15px' }}><strong> Bits:</strong> Usaremos solo <span className="highlight">3 interruptores</span> (4, 2, 1).</p>
                   <p style={{ marginBottom: '15px' }}><strong> Tiempo:</strong> No hay cronómetro.</p>
@@ -336,7 +359,7 @@ function NivelFacil({ volverAOpciones }) {
           {gameState === 'won' && (
             <div className="converter-card success-screen">
               <h1 className="title-huge success-text">¡ENTRENAMIENTO COMPLETADO!</h1>
-              <p className="message">Has dominado la base del sistema binario.</p>
+              <p className="message">Felicidades <span className="highlight">{name}</span>, has dominado la base del sistema binario.</p>
               <div className="score-board">Puntuación Final: <span className="highlight-value">{score}</span></div>
               <div className="controls-container mt-20" style={{justifyContent: 'center', gap: '20px'}}>
                   <button className="next-button ready" onClick={resetGame}>Jugar de Nuevo</button>

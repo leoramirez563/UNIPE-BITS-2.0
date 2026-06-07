@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
+import confetti from 'canvas-confetti'; 
 
 const POWERS = [32, 16, 8, 4, 2, 1];
 const TOTAL_ROUNDS = 20;
@@ -10,7 +10,7 @@ const generateShuffledTargets = (count) => {
   return allNumbers.sort(() => Math.random() - 0.5).slice(0, count);
 };
 
-function NivelMedio({ volverAOpciones }) {
+function NivelMedio({ volverAOpciones, name, onGuardarPartida }) {
   const [gameState, setGameState] = useState('instructions'); 
   const [showProtocol, setShowProtocol] = useState(false); 
   const [bits, setBits] = useState(Array(6).fill(0));
@@ -19,20 +19,34 @@ function NivelMedio({ volverAOpciones }) {
   const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   const [targetList, setTargetList] = useState([]);
   const [target, setTarget] = useState(0);
+  
+  const [errorsCount, setErrorsCount] = useState(0);
 
   const currentSum = bits.reduce((acc, bit, index) => acc + (bit * POWERS[index]), 0);
   const binaryString = bits.join('');
   const isError = currentSum > target;
   const isSuccess = currentSum === target;
 
-  const audioMal = useRef(null);
-  const audioBien = useRef(null);
-  const audioSiguiente = useRef(null);
-  const audioVictoria = useRef(null);
   const audioFondo = useRef(null); 
-  const audioPerdiste = useRef(null);
-  const audioPop = useRef(null);
   const canvasRef = useRef(null);
+
+  // Mantenemos referencias estables actualizadas para el hilo aislado del temporizador
+  const onGuardarPartidaRef = useRef(onGuardarPartida);
+  const errorsCountRef = useRef(errorsCount);
+
+  // CANDADO ANTI-DUPLICADOS (Evita el doble disparo por StrictMode o renders simultáneos)
+  const partidaGuardadaRef = useRef(false);
+
+  useEffect(() => {
+    onGuardarPartidaRef.current = onGuardarPartida;
+    errorsCountRef.current = errorsCount;
+  }, [onGuardarPartida, errorsCount]);
+
+  const playEfecto = (rutaJson) => {
+    const audio = new Audio(process.env.PUBLIC_URL + rutaJson);
+    audio.currentTime = 0;
+    audio.play().catch(e => console.log("Audio de efecto bloqueado:", e));
+  };
 
   useEffect(() => {
     const newList = generateShuffledTargets(TOTAL_ROUNDS);
@@ -40,6 +54,7 @@ function NivelMedio({ volverAOpciones }) {
     setTarget(newList[0]);
   }, []);
 
+  // MATRIX BACKGROUND EFFECT
   useEffect(() => {
     if (showProtocol && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -76,35 +91,55 @@ function NivelMedio({ volverAOpciones }) {
     }
   }, [showProtocol]);
 
-  const playSound = (audioRef) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(e => console.log("Audio blocked"));
-    }
-  };
-
+  // =====================================================================
+  // CONTROL DE MÚSICA EN LAZO (Sin rebobinados accidentales)
+  // =====================================================================
   useEffect(() => {
     const music = audioFondo.current;
-    if (gameState === 'playing' && music) {
+    if (!music) return;
+
+    if (gameState === 'playing') {
       music.loop = true;
       music.play().catch(e => console.log("Interaction required"));
-    }
-    if (gameState !== 'playing' && music) {
+    } else if (gameState === 'lost' || gameState === 'won' || gameState === 'instructions') {
       music.pause();
       music.currentTime = 0;
     }
+  }, [gameState]);
 
+  // =====================================================================
+  // TEMPORIZADOR ATÓMICO (100% Sincronizado, 1 bucle único por partida)
+  // =====================================================================
+  useEffect(() => {
     if (gameState !== 'playing') return;
 
-    if (timeLeft <= 0) {
-      setGameState('lost');
-      playSound(audioPerdiste); 
-      return;
-    }
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setGameState('lost');
+          playEfecto("/sounds/perdiste.mp3"); 
 
-    const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+          // CANDADO APLICADO AL PERDER (Tiempo Agotado)
+          if (!partidaGuardadaRef.current && onGuardarPartidaRef.current) {
+            partidaGuardadaRef.current = true; // Cierre inmediato síncrono
+            onGuardarPartidaRef.current({
+              nivel: 'Medio',
+              errores: errorsCountRef.current,
+              completada: false,
+              objetivo_cumplido: false,
+              tiempo_tomado: INITIAL_TIME,
+              tiempo_restante: 0
+            });
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => clearInterval(timer);
-  }, [timeLeft, gameState]);
+  }, [gameState]); // Reducido estrictamente a la inicialización del gameplay
 
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -122,9 +157,10 @@ function NivelMedio({ volverAOpciones }) {
     if (isTurningOn) {
       if (nextSum > target) {
         setScore(prev => Math.max(0, prev - 20));
-        playSound(audioMal); 
+        setErrorsCount(prev => prev + 1); 
+        playEfecto("/sounds/mal.mp3"); 
       } else {
-        playSound(audioBien);
+        playEfecto("/sounds/bien.mp3");
       }
     }
     setBits(newBits);
@@ -135,10 +171,24 @@ function NivelMedio({ volverAOpciones }) {
       setScore(prev => prev + 20);
       if (round >= TOTAL_ROUNDS) {
         setGameState('won');
-        playSound(audioVictoria);
+        playEfecto("/sounds/victoria.mp3");
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+
+        // CANDADO APLICADO AL GANAR LAS 20 RONDAS
+        if (!partidaGuardadaRef.current && onGuardarPartidaRef.current) {
+          partidaGuardadaRef.current = true; // Cierre inmediato síncrono
+          onGuardarPartidaRef.current({
+            nivel: 'Medio',
+            errores: errorsCount,
+            completada: true,
+            objetivo_cumplido: true,
+            tiempo_tomado: INITIAL_TIME - timeLeft,
+            tiempo_restante: timeLeft
+          });
+        }
+
       } else {
-        playSound(audioSiguiente);
+        playEfecto("/sounds/siguiente.mp3");
         setRound(prev => prev + 1);
         setTarget(targetList[round]); 
         setBits(Array(6).fill(0));
@@ -153,8 +203,10 @@ function NivelMedio({ volverAOpciones }) {
     setGameState('playing');
     setRound(1);
     setScore(0);
+    setErrorsCount(0);
     setTimeLeft(INITIAL_TIME);
     setBits(Array(6).fill(0));
+    partidaGuardadaRef.current = false; // Liberamos el candado para permitir guardar la nueva partida
   };
 
   return (
@@ -213,13 +265,7 @@ function NivelMedio({ volverAOpciones }) {
         `}
       </style>
 
-      <audio ref={audioMal} src={process.env.PUBLIC_URL + "/sounds/mal.mp3"} />
-      <audio ref={audioBien} src={process.env.PUBLIC_URL + "/sounds/bien.mp3"} />
-      <audio ref={audioSiguiente} src={process.env.PUBLIC_URL + "/sounds/siguiente.mp3"} />
-      <audio ref={audioVictoria} src={process.env.PUBLIC_URL + "/sounds/victoria.mp3"} />
       <audio ref={audioFondo} src={process.env.PUBLIC_URL + "/sounds/ultimo_minuto.mp3"} />
-      <audio ref={audioPerdiste} src={process.env.PUBLIC_URL + "/sounds/perdiste.mp3"} />
-      <audio ref={audioPop} src={process.env.PUBLIC_URL + "/sounds/Pop.mp3"} />
 
       {showProtocol ? (
         <div className="proto-body" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999, overflowY: 'auto' }}>
@@ -231,7 +277,7 @@ function NivelMedio({ volverAOpciones }) {
             </header>
             <section className="lesson-card-proto">
               <h2 style={{color: 'var(--neon-green)'}}>1. El Sistema de 6 Posiciones</h2>
-              <p>En un sistema de 6 bits, cada posición representa una potencia de 2, desde $2^0$ hasta $2^5$:</p>
+              <p>En un sistema de 6 bits, cada posición representa una potencia de 2, desde 2⁰ hasta 2⁵:</p>
               <div className="math-grid-proto">
                 <div className="math-box-proto"><span className="pow-text-proto">2⁵</span><span className="val-text-proto">32</span><span className="desc-text-proto">Bit 6</span></div>
                 <div className="math-box-proto"><span className="pow-text-proto">2⁴</span><span className="val-text-proto">16</span><span className="desc-text-proto">Bit 5</span></div>
@@ -256,7 +302,7 @@ function NivelMedio({ volverAOpciones }) {
             </section>
             <section className="lesson-card-proto">
               <h2 style={{color: 'var(--neon-green)'}}>3. Cómo resolver números grandes</h2>
-              <p>Si el sistema te pide el número <span className="highlight-proto">55</span>:</p>
+              <p>Si el systema te pide el número <span className="highlight-proto">55</span>:</p>
               <div className="step-proto">¿Cabe el 32? <strong>SÍ</strong>. (Restan 23). Ponemos un 1.</div>
               <div className="step-proto">¿Cabe el 16? <strong>SÍ</strong>. (Restan 7). Ponemos un 1.</div>
               <div className="step-proto">¿Cabe el 8? NO. Ponemos un 0.</div>
@@ -279,17 +325,17 @@ function NivelMedio({ volverAOpciones }) {
                 </tbody>
               </table>
             </section>
-            <button className="btn-cerrar-proto" onClick={() => { playSound(audioPop); setShowProtocol(false); }}>VOLVER AL JUEGO</button>
+            <button className="btn-cerrar-proto" onClick={() => { playEfecto("/sounds/Pop.mp3"); setShowProtocol(false); }}>VOLVER AL JUEGO</button>
           </div>
         </div>
       ) : (
         <>
           {gameState === 'instructions' && (
             <>
-              <button className="btn-protocolo" onClick={() => { playSound(audioPop); setShowProtocol(true); }}>Protocolo</button>
+              <button className="btn-protocolo" onClick={() => { playEfecto("/sounds/Pop.mp3"); setShowProtocol(true); }}>Protocolo</button>
               <div className="converter-card instruction-card">
                 <h1 className="success-text">OBJETIVO DE LA MISIÓN</h1>
-                <p>Debes estabilizar el núcleo convirtiendo números decimales a binario.</p>
+                <p>Bienvenido operador <span className="highlight-proto">{name}</span>. Debes estabilizar el núcleo convirtiendo números decimales a binario.</p>
                 <ul className="instruction-list" style={{ listStyle: 'none', padding: 0 }}>
                   <p style={{ marginBottom: '15px' }}>
                     <strong> Niveles:</strong> Debes completar <span className="highlight"> 20 conversiones </span> únicas.
@@ -306,7 +352,7 @@ function NivelMedio({ volverAOpciones }) {
                 </ul>
                 <div className="controls-container" style={{justifyContent: 'center', gap: '20px', marginTop: '30px'}}>
                   <button className="btn-volver" onClick={volverAOpciones}>atras</button>
-                  <button className="next-button ready" onClick={() => { playSound(audioPop); setGameState('playing'); }}>¡ENTENDIDO, EMPEZAR!</button>
+                  <button className="next-button ready" onClick={() => { playEfecto("/sounds/Pop.mp3"); setGameState('playing'); }}>¡ENTENDIDO, EMPEZAR!</button>
                 </div>
               </div>
             </>
@@ -368,7 +414,7 @@ function NivelMedio({ volverAOpciones }) {
           {gameState === 'won' && (
             <div className="converter-card success-screen">
               <h1 className="title-huge success-text">¡SISTEMA ESTABILIZADO!</h1>
-              <p className="message">Has completado las 20 conversiones exitosamente.</p>
+              <p className="message">Excelente trabajo, <span className="highlight-proto" style={{ textTransform: 'uppercase' }}>{name}</span>. Has completado las 20 conversiones exitosamente.</p>
               <div className="score-board">Puntuación Final: <span className="highlight-value">{score}</span></div>
               <p className="message">Tiempo Sobrante: {formatTime(timeLeft)}</p>
               <div className="controls-container mt-20" style={{justifyContent: 'center', gap: '20px'}}>

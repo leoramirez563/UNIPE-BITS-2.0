@@ -7,7 +7,7 @@ const INITIAL_TIME = 90; // 1:30 minutos
 
 const generateTarget = () => Math.floor(Math.random() * 254) + 1;
 
-function JuegoDificil({ volverAOpciones }) {
+function JuegoDificil({ volverAOpciones, name, onGuardarPartida }) {
   const [gameState, setGameState] = useState('instructions'); 
   const [bits, setBits] = useState(Array(8).fill(0));
   const [score, setScore] = useState(0);
@@ -15,6 +15,7 @@ function JuegoDificil({ volverAOpciones }) {
   const [target, setTarget] = useState(generateTarget());
   const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   
+  const [errorsCount, setErrorsCount] = useState(0);
   const [showProtocol, setShowProtocol] = useState(false);
 
   const currentSum = bits.reduce((acc, bit, index) => acc + (bit * POWERS[index]), 0);
@@ -32,6 +33,18 @@ function JuegoDificil({ volverAOpciones }) {
   
   const canvasRef = useRef(null);
 
+  // Guardamos las funciones en refs para que el temporizador use siempre la última versión sin reiniciarse
+  const onGuardarPartidaRef = useRef(onGuardarPartida);
+  const errorsCountRef = useRef(errorsCount);
+
+  // CANDADO ANTI-DUPLICADOS SÍNCRONO
+  const partidaGuardadaRef = useRef(false);
+
+  useEffect(() => {
+    onGuardarPartidaRef.current = onGuardarPartida;
+    errorsCountRef.current = errorsCount;
+  }, [onGuardarPartida, errorsCount]);
+
   const playSound = (audioRef) => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
@@ -39,6 +52,7 @@ function JuegoDificil({ volverAOpciones }) {
     }
   };
 
+  // MATRIX BACKGROUND EFFECT
   useEffect(() => {
     if (showProtocol && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -62,12 +76,9 @@ function JuegoDificil({ volverAOpciones }) {
         const matrixColor = getComputedStyle(document.documentElement).getPropertyValue('--matrix-green').trim() || "#0F0";
 
         for(let i = 0; i < drops.length; i++) {
-          let texto;
-          if (Math.random() > 0.98) {
-            texto = nombres[Math.floor(Math.random() * nombres.length)];
-          } else {
-            texto = binario[Math.floor(Math.random() * binario.length)];
-          }
+          let texto = Math.random() > 0.98 
+            ? nombres[Math.floor(Math.random() * nombres.length)] 
+            : binario[Math.floor(Math.random() * binario.length)];
           
           ctx.fillStyle = matrixColor; 
           ctx.fillText(texto, i * fontSize, drops[i] * fontSize);
@@ -80,29 +91,55 @@ function JuegoDificil({ volverAOpciones }) {
     }
   }, [showProtocol]);
 
+  // =====================================================================
+  // CONTROL DE MÚSICA LIMPIO (Sin rebobinar si ya está sonando)
+  // =====================================================================
   useEffect(() => {
     const music = audioDificil.current;
-    if (gameState === 'playing' && music) {
+    if (!music) return;
+
+    if (gameState === 'playing') {
       music.loop = true;
       music.play().catch(e => console.log("Interacción requerida"));
-    }
-    if (gameState !== 'playing' && music) {
+    } else if (gameState === 'lost' || gameState === 'won' || gameState === 'instructions') {
       music.pause();
       music.currentTime = 0;
     }
-    return () => { if (music) { music.pause(); music.currentTime = 0; } };
   }, [gameState]);
 
+  // =====================================================================
+  // TEMPORIZADOR ATÓMICO (100% Sincronizado, 1 ciclo único)
+  // =====================================================================
   useEffect(() => {
     if (gameState !== 'playing') return;
-    if (timeLeft <= 0) {
-      setGameState('lost');
-      playSound(audioPerdiste);
-      return;
-    }
-    const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setGameState('lost');
+          playSound(audioPerdiste);
+
+          // CANDADO APLICADO AL PERDER (Tiempo Agotado)
+          if (!partidaGuardadaRef.current && onGuardarPartidaRef.current) {
+            partidaGuardadaRef.current = true; // Cierre inmediato instantáneo
+            onGuardarPartidaRef.current({
+              nivel: 'Difícil',
+              errores: errorsCountRef.current,
+              completada: false,
+              objetivo_cumplido: false,
+              tiempo_tomado: INITIAL_TIME,
+              tiempo_restante: 0
+            });
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => clearInterval(timer);
-  }, [timeLeft, gameState]);
+  }, [gameState]); // Única dependencia: solo se ejecuta al cambiar el estado del juego
 
   const toggleBit = (index) => {
     if (gameState !== 'playing') return;
@@ -113,6 +150,7 @@ function JuegoDificil({ volverAOpciones }) {
     if (isTurningOn) {
       if (nextSum > target) {
         setScore(prev => Math.max(0, prev - 20));
+        setErrorsCount(prev => prev + 1); 
         playSound(audioMal); 
       } else {
         playSound(audioBien);
@@ -128,6 +166,19 @@ function JuegoDificil({ volverAOpciones }) {
         setGameState('won');
         playSound(audioVictoria);
         confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+
+        // CANDADO APLICADO AL GANAR LAS 15 RONDAS
+        if (!partidaGuardadaRef.current && onGuardarPartidaRef.current) {
+          partidaGuardadaRef.current = true; // Cierre inmediato instantáneo
+          onGuardarPartidaRef.current({
+            nivel: 'Difícil',
+            errores: errorsCount,
+            completada: true,
+            objetivo_cumplido: true,
+            tiempo_tomado: INITIAL_TIME - timeLeft,
+            tiempo_restante: timeLeft
+          });
+        }
       } else {
         playSound(audioSiguiente);
         setRound(prev => prev + 1);
@@ -141,9 +192,11 @@ function JuegoDificil({ volverAOpciones }) {
     setGameState('playing');
     setRound(1);
     setScore(0);
+    setErrorsCount(0); 
     setTimeLeft(INITIAL_TIME);
     setTarget(generateTarget());
     setBits(Array(8).fill(0));
+    partidaGuardadaRef.current = false; // Liberación del candado para la nueva partida
   };
 
   const formatTime = (seconds) => {
@@ -280,7 +333,7 @@ function JuegoDificil({ volverAOpciones }) {
           <button className="btn-protocolo-dificil" onClick={() => { playSound(audioPop); setShowProtocol(true); }}>Protocolo</button>
           <div className="converter-card instruction-card">
             <h1 className="success-text" style={{color: 'var(--matrix-green)'}}>OBJETIVO DE LA MISIÓN</h1>
-            <p>Debes estabilizar el núcleo convirtiendo números decimales a binario.</p>
+            <p>Bienvenido operador <span className="highlight">{name}</span>. Debes estabilizar el núcleo convirtiendo números decimales a binario.</p>
             <ul className="instruction-list" style={{ listStyle: 'none', padding: 0 }}>
               <p style={{ marginBottom: '15px' }}>
                 <strong> Niveles:</strong> Debes completar <span className="highlight"> 15 conversiones </span> únicas.
@@ -359,7 +412,7 @@ function JuegoDificil({ volverAOpciones }) {
       {gameState === 'won' && (
         <div className="converter-card success-screen">
           <h1 className="title-huge success-text" style={{color: 'var(--matrix-green)'}}>¡SISTEMA ESTABILIZADO!</h1>
-          <p className="message">Has completado las 15 conversiones exitosamente.</p>
+          <p className="message">Excelente trabajo, <span className="highlight" style={{ textTransform: 'uppercase' }}>{name}</span>. Has completado las 15 conversiones exitosamente.</p>
           <div className="score-board">Puntuación Final: <span className="highlight-value">{score}</span></div>
           <div className="controls-container mt-20" style={{justifyContent: 'center', gap: '20px'}}>
              <button className="next-button ready" onClick={resetGame}>Jugar de Nuevo</button>
