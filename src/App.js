@@ -6,6 +6,9 @@ import NivelFacil from './components/NivelFacil.js';
 import NivelMedio from './components/NivelMedio.js';
 import NivelDificil from './components/NivelDificil.js';
 
+// 🌐 CONFIGURACIÓN DEL TÚNEL DE BACKEND (Cambiá este link si reiniciás Ngrok)
+const API_URL = "https://clicker-edging-broker.ngrok-free.dev";
+
 // =====================================================================
 // COMPONENTE: EFECTO MÁQUINA DE ESCRIBIR
 // =====================================================================
@@ -94,7 +97,7 @@ function App() {
   }, []);
 
   // =====================================================================
-  // FUNCIÓN OPTIMIZADA CON useCallback PARA EVITAR RE-RENDERIZADOS Y CORTES DE AUDIO
+  // FUNCIÓN OPTIMIZADA PARA GUARDAR PARTIDAS APUNTANDO A LA API PÚBLICA
   // =====================================================================
   const guardarPartidaEnBaseDeDatos = useCallback(async (datosPartida) => {
     try {
@@ -108,7 +111,8 @@ function App() {
         else nivelCalculado = 'Fácil';
       }
 
-      const respuesta = await fetch('http://localhost:3000/api/guardar-partida', {
+      // 🛠️ Cambiado: Ahora le pega a la constante API_URL (Tu Ngrok) en vez de localhost
+      const respuesta = await fetch(`${API_URL}/api/guardar-partida`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -129,9 +133,8 @@ function App() {
     } catch (error) {
       console.error("Error al conectar con el servidor de guardado:", error);
     }
-  }, [nombreUsuario, pantalla]); // Solo se recrea si cambia el usuario o el nivel
+  }, [nombreUsuario, pantalla]); 
 
-  // Función para validar el avance si el usuario escribió un nombre
   const handleComenzar = () => {
     playPop();
     if (nombreUsuario.trim() === "") {
@@ -148,7 +151,6 @@ function App() {
       <audio ref={audioPop} src={process.env.PUBLIC_URL + "/sounds/Pop.mp3"} preload="auto" />
       <audio ref={audioAcceso} src={process.env.PUBLIC_URL + "/sounds/Acceso.mp3"} preload="auto" />
 
-      {/* RENDERIZADO CONDICIONAL DE NIVELES CON LA FUNCIÓN DE GUARDADO INYECTADA */}
       {pantalla === 'facil' && (
         <NivelFacil 
           volverAOpciones={() => { playPop(); setPantalla('opciones'); }} 
@@ -181,11 +183,15 @@ function App() {
               <p>Requerimos un protocolo de <span className="highlight">conversión de datos</span> para restaurar el sistema.</p>
               
               <div className="input-container">
-                <label className="input-label">
+                {/* 🛠️ Corregido: Agregado htmlFor para asociar la etiqueta al input */}
+                <label htmlFor="nombreOperador" className="input-label">
                   IDENTIFICACIÓN DEL OPERADOR:
                 </label>
+                {/* 🛠️ Corregido: Agregados atributos id y name para el navegador */}
                 <input 
                   type="text" 
+                  id="nombreOperador"
+                  name="nombreOperador"
                   className="input-operador"
                   value={nombreUsuario}
                   onChange={(e) => setNombreUsuario(e.target.value)}
