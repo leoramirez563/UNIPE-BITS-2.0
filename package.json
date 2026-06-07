@@ -1,7 +1,6 @@
 {
   "name": "unipe-bits",
   "version": "2.0.0",
-  "homepage": "https://leoramirez563.github.io/UNIPE-BITS-2.0",
   "private": true,
   "type": "module",
   "dependencies": {
