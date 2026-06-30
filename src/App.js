@@ -111,11 +111,12 @@ function App() {
         else nivelCalculado = 'Fácil';
       }
 
-      // 🛠️ Cambiado: Ahora le pega a la constante API_URL (Tu Ngrok) en vez de localhost
+      // 🛠️ CONFIGURADO CORRECTAMENTE CON LA CABECERA PARA SALTAR EL FILTRO DE NGROK
       const respuesta = await fetch(`${API_URL}/api/guardar-partida`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true' // <--- ESTA LÍNEA SE AGREGÓ AQUÍ
         },
         body: JSON.stringify({
           nombre_usuario: nombreUsuario, 
@@ -183,11 +184,9 @@ function App() {
               <p>Requerimos un protocolo de <span className="highlight">conversión de datos</span> para restaurar el sistema.</p>
               
               <div className="input-container">
-                {/* 🛠️ Corregido: Agregado htmlFor para asociar la etiqueta al input */}
                 <label htmlFor="nombreOperador" className="input-label">
                   IDENTIFICACIÓN DEL OPERADOR:
                 </label>
-                {/* 🛠️ Corregido: Agregados atributos id y name para el navegador */}
                 <input 
                   type="text" 
                   id="nombreOperador"
